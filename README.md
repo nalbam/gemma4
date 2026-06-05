@@ -15,19 +15,24 @@
 - WSL / Linux + NVIDIA GPU — Ollama 백엔드 ([WSL / CUDA (Ollama)](#wsl--cuda-ollama))
 - 모델: [`mlx-community/gemma-4-12B-it-4bit`](https://huggingface.co/mlx-community/gemma-4-12B-it-4bit) (~7GB, 추론 시 메모리 ~11GB) / Linux는 `gemma4:12b`
 
-## 설치
+## 설치 (macOS / MLX)
 
 ```bash
-cd ~/workspace/github.com/nalbam/gemma4
+# Python (Homebrew). mlx/mlx-vlm 은 pip(PyPI)로 설치된다.
+brew install python@3.12
 
-# 패키지
+# 패키지 + 모델 한 번에
+./scripts/setup-mac.sh
+```
+
+`scripts/setup-mac.sh`는 Python을 확인하고 `requirements.txt`(mlx 등)를 설치한 뒤 `gemma-4-12B-it-4bit`(~7GB)를 받는다.
+
+수동으로 하려면:
+
+```bash
 pip install -r requirements.txt
-
-# 모델 다운로드 (~7GB)
 hf download mlx-community/gemma-4-12B-it-4bit
-
-# 8bit도 쓰려면 함께 받는다 (~12.7GB)
-hf download mlx-community/gemma-4-12B-it-8bit
+hf download mlx-community/gemma-4-12B-it-8bit   # 8bit도 쓰려면 (~12.7GB)
 ```
 
 ## 서버
