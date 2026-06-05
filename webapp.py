@@ -14,7 +14,11 @@ from fastapi.templating import Jinja2Templates
 
 BASE_DIR = Path(__file__).parent
 GEMMA_URL = "http://127.0.0.1:8080/v1"
-MODEL = "mlx-community/gemma-4-12B-it-4bit"
+MODELS = {
+    "4bit": "mlx-community/gemma-4-12B-it-4bit",
+    "8bit": "mlx-community/gemma-4-12B-it-8bit",
+}
+DEFAULT_VARIANT = "4bit"
 WEB_HOST = "127.0.0.1"
 WEB_PORT = 8000
 
@@ -32,6 +36,49 @@ def server_pid() -> int | None:
     r = subprocess.run(["pgrep", "-f", "mlx_vlm.server"], capture_output=True, text=True)
     pids = r.stdout.split()
     return int(pids[0]) if pids else None
+
+
+def current_variant() -> str | None:
+    """실행 중인 서버가 로드한 variant (--model 인자에서 파싱, 없으면 None).
+    mlx_vlm.server는 메인+워커 여러 프로세스를 띄우므로, --model 인자를 가진
+    프로세스를 찾을 때까지 모든 매칭 프로세스를 확인한다."""
+    r = subprocess.run(["pgrep", "-f", "mlx_vlm.server"], capture_output=True, text=True)
+    for pid in r.stdout.split():
+        cmd = subprocess.run(["ps", "-o", "command=", "-p", pid], capture_output=True, text=True).stdout
+        for variant, model in MODELS.items():
+            if model in cmd:
+                return variant
+    return None
+
+
+def model_ready(variant: str) -> bool:
+    """모델 가중치가 캐시에 완전히 받아졌는지 확인한다.
+    미완(다운로드 중)이면 mlx_vlm.server가 기동 중 HF 다운로드로 블록되어
+    응답·중지가 막히므로, 시작 전에 차단하기 위한 가드."""
+    repo = MODELS[variant].replace("/", "--")
+    hub = Path.home() / ".cache" / "huggingface" / "hub" / f"models--{repo}"
+    snapshots, blobs = hub / "snapshots", hub / "blobs"
+    if not snapshots.exists():
+        return False
+    has_weights = any(snapshots.glob("*/*.safetensors"))
+    downloading = blobs.exists() and any(blobs.glob("*.incomplete"))
+    return has_weights and not downloading
+
+
+def server_ready() -> bool:
+    """gemma 서버가 실제 요청을 받을 수 있는 상태인지 (/v1/models 200).
+    프로세스는 떴지만 모델 로딩/다운로드 중이면 응답하지 못해 False."""
+    try:
+        return httpx.get(f"{GEMMA_URL}/models", timeout=1.5).status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+def server_state(variant: str | None) -> str:
+    """stopped(프로세스 없음) | loading(떴지만 로딩 중) | ready(서빙 가능)."""
+    if variant is None:
+        return "stopped"
+    return "ready" if server_ready() else "loading"
 
 
 def _used_mem_gb() -> float:
@@ -94,25 +141,46 @@ def _process_metrics(pid: int) -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return templates.TemplateResponse(request, "index.html", {"model": MODEL})
+    return templates.TemplateResponse(
+        request, "index.html",
+        {"variants": list(MODELS), "default_variant": DEFAULT_VARIANT, "models": MODELS},
+    )
 
 
 @app.get("/api/server/status")
 def server_status():
-    pid = server_pid()
-    return {"running": pid is not None, "pid": pid}
+    # running은 모델을 로드한(또는 로드 중인) 메인 프로세스 기준.
+    # 중지 직후 잠깐 남는 워커(--model 없음)는 variant=None이라 running=False로 본다.
+    variant = current_variant()
+    return {"state": server_state(variant), "running": variant is not None, "pid": server_pid(), "variant": variant}
 
 
 @app.post("/api/server/start")
-def server_start():
-    if server_pid():
+async def server_start(request: Request):
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        body = {}
+    variant = body.get("variant", DEFAULT_VARIANT)
+    if variant not in MODELS:
+        return JSONResponse(status_code=400, content={"ok": False, "message": f"지원하지 않는 variant: {variant}"})
+    if not model_ready(variant):
+        return JSONResponse(status_code=409, content={"ok": False, "message": f"{variant} 모델이 아직 다운로드 중입니다. 완료 후 시작하세요."})
+
+    cur = current_variant()
+    if cur == variant:
         return {"ok": True, "message": "이미 실행 중입니다."}
+    if cur is not None:
+        # 다른 variant 실행 중 → 중지 후 재기동 (서버는 단일 모델만 로드)
+        subprocess.run(["./stop.sh"], cwd=str(BASE_DIR), capture_output=True, text=True)
+
     # start.sh는 준비까지 최대 120초 폴링하므로 기다리지 않고 비블로킹 실행
     subprocess.Popen(
-        ["./start.sh"], cwd=str(BASE_DIR),
+        ["./start.sh", variant], cwd=str(BASE_DIR),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
-    return {"ok": True, "message": "서버를 시작합니다. 준비까지 수십 초 걸립니다."}
+    switching = "모델 전환 중 — " if cur is not None else ""
+    return {"ok": True, "message": f"{switching}{variant} 서버를 시작합니다. 준비까지 수십 초 걸립니다."}
 
 
 @app.post("/api/server/stop")
@@ -127,20 +195,23 @@ def server_stop():
 def metrics():
     pid = server_pid()
     process = _process_metrics(pid) if pid else {"running": False, "pid": None, "cpu": 0, "mem_gb": 0.0, "mem_pct": 0, "etime": ""}
-    return {"system": _system_metrics(), "process": process, "ncpu": NCPU}
+    variant = current_variant()
+    return {"system": _system_metrics(), "process": process, "ncpu": NCPU, "variant": variant, "state": server_state(variant)}
 
 
 @app.post("/api/chat")
 async def chat(request: Request):
     body = await request.json()
     messages = body.get("messages", [])
-    if server_pid() is None:
+    variant = current_variant()
+    if variant is None:
         return JSONResponse(status_code=502, content={"error": "gemma 서버가 꺼져 있습니다. 먼저 서버를 시작하세요."})
+    model = MODELS[variant]
 
     async def stream():
         # NDJSON: 한 줄에 {"delta": "<토큰 텍스트>", "n": <누적 토큰 수>}
         # mlx 스트리밍은 토큰당 delta를 보내므로 delta 개수 = 생성 토큰 수
-        payload = {"model": MODEL, "messages": messages, "max_tokens": 4096, "stream": True}
+        payload = {"model": model, "messages": messages, "max_tokens": 4096, "stream": True}
         n = 0
         try:
             async with httpx.AsyncClient(timeout=300) as client:

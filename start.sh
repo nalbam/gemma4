@@ -4,7 +4,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-MODEL="mlx-community/gemma-4-12B-it-4bit"
+VARIANT="${1:-4bit}"
+if [[ "${VARIANT}" != "4bit" && "${VARIANT}" != "8bit" ]]; then
+  echo "지원하지 않는 variant: ${VARIANT} (4bit | 8bit)" >&2
+  exit 1
+fi
+
+MODEL="mlx-community/gemma-4-12B-it-${VARIANT}"
 HOST="127.0.0.1"
 PORT="8080"
 LOG="/tmp/gemma4_server.log"

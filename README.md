@@ -18,6 +18,9 @@ pip install -r requirements.txt
 
 # 모델 다운로드 (~7GB)
 hf download mlx-community/gemma-4-12B-it-4bit
+
+# 8bit도 쓰려면 함께 받는다 (~12.7GB)
+hf download mlx-community/gemma-4-12B-it-8bit
 ```
 
 ## 서버
@@ -25,8 +28,9 @@ hf download mlx-community/gemma-4-12B-it-4bit
 ### 스크립트 (권장)
 
 ```bash
-./start.sh   # 백그라운드 기동 + 준비 완료까지 대기
-./stop.sh    # 중지
+./start.sh         # 4bit로 백그라운드 기동 + 준비 완료까지 대기 (기본)
+./start.sh 8bit    # 8bit로 기동
+./stop.sh          # 중지
 ```
 
 ### 띄우기 (직접)
@@ -129,12 +133,12 @@ python webapp.py   # http://127.0.0.1:8000
 
 의존성은 위 `requirements.txt`에 포함되어 별도 설치는 필요 없다.
 
-- **서버 제어** — 시작/중지 버튼이 `start.sh`/`stop.sh`를 호출한다. gemma 서버가 꺼져 있어도 UI에서 바로 기동할 수 있다.
+- **서버 제어** — 4bit/8bit를 드롭다운에서 골라 시작/중지한다 (`start.sh`/`stop.sh` 호출). 실행 중 다른 정밀도를 고르고 시작하면 자동으로 재기동해 전환한다. 서버가 꺼져 있어도 UI에서 바로 기동할 수 있다.
 - **모니터링** — 전체 시스템과 gemma4 프로세스의 CPU·MEM을 2초 간격으로 갱신한다 (`monitor.sh`와 같은 지표).
 - **채팅** — 스트리밍 응답, 마크다운·표 렌더링, 이미지 첨부(멀티모달)를 지원한다. 서버가 꺼져 있으면 먼저 시작하라는 안내가 뜬다.
 
 ## 참고
 
 - 응답에 `<audio|>`·`<image|>` 같은 멀티모달 특수 토큰이 가끔 섞여 나올 수 있다 (서버 디코딩 아티팩트). 필요하면 클라이언트에서 후처리로 제거한다.
-- 더 높은 품질이 필요하면 8bit(`mlx-community/gemma-4-12B-it-8bit`, ~12.7GB)로 교체할 수 있다. 메모리 여유를 확인한다.
+- 4bit/8bit는 웹 UI 드롭다운 또는 `./start.sh 8bit`로 전환한다. 8bit(~12.7GB)가 품질이 더 높고, 4bit(~11GB) 대비 메모리 차이는 작다.
 - 슬립 방지(장시간 서빙): `sudo pmset -a sleep 0`

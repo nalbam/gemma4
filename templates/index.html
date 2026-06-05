@@ -25,10 +25,13 @@
   .badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
   .badge.on { background: rgba(54,196,111,.15); color: var(--green); }
   .badge.off { background: rgba(226,80,59,.15); color: var(--red); }
+  .badge.loading { background: rgba(224,179,65,.15); color: var(--yellow); }
   button { background: var(--accent); color: #fff; border: 0; border-radius: 8px;
     padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
   button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
   button:disabled { opacity: .45; cursor: not-allowed; }
+  select.ghost { background: transparent; border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .metric { margin: 6px 0; }
   .metric .label { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-bottom: 2px; }
   .bar { height: 6px; background: #11141a; border-radius: 3px; overflow: hidden; }
@@ -68,9 +71,12 @@
 
   <div class="panel">
     <div class="row">
-      <h1>gemma4 <span class="hint">{{ model }}</span></h1>
+      <h1>gemma4 <span id="modelName" class="hint">gemma-4-12B-it</span></h1>
       <div class="spacer"></div>
       <span id="badge" class="badge off">확인 중…</span>
+      <select id="variant" class="ghost">
+        {% for v in variants %}<option value="{{ v }}"{% if v == default_variant %} selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
       <button id="btnStart" class="ghost">시작</button>
       <button id="btnStop" class="ghost">중지</button>
     </div>
@@ -109,6 +115,8 @@
 <script>
 const $ = (id) => document.getElementById(id);
 let pendingState = null;  // 'on' | 'off' — 서버 전환 대기 상태(도달하면 안내 메시지 제거)
+let currentVariant = null;  // 실행 중 로드된 variant ('4bit'|'8bit'|null)
+let initialSync = false;    // 최초 poll 시 select를 실행 중 variant로 1회 동기화
 
 // ---- 색상: 임계값 ----
 function colorFor(pct) {
@@ -170,30 +178,55 @@ async function poll() {
     setBar('sysCpu', 'sysCpuT', m.system.cpu, m.system.cpu + '%');
     setBar('sysMem', 'sysMemT', m.system.mem_pct, `${m.system.mem_used_gb} / ${m.system.mem_total_gb} GB`);
     const p = m.process;
-    if (p.running) {
+    const state = m.state;  // 'stopped' | 'loading' | 'ready'
+    if (state !== 'stopped' && p.running) {
       setBar('pCpu', 'pCpuT', p.cpu, `${p.cpu}% (raw, ${m.ncpu}코어)`);
       setBar('pMem', 'pMemT', p.mem_pct, `${p.mem_gb} / ${m.system.mem_total_gb} GB`);
-      setBadge(true, p.pid);
     } else {
       setBar('pCpu', 'pCpuT', 0, '–');
       setBar('pMem', 'pMemT', 0, '–');
-      setBadge(false);
     }
+    setBadge(state, p.pid, m.variant);
   } catch (e) { /* 일시적 실패 무시 */ }
 }
 
-function setBadge(on, pid) {
+function setBadge(state, pid, variant) {
+  const on = state !== 'stopped';
+  currentVariant = on ? variant : null;
+  // 페이지 로드 시 실행 중인 variant로 select를 1회 맞춘다 (이후엔 사용자 선택 우선)
+  if (!initialSync && currentVariant) $('variant').value = currentVariant;
+  initialSync = true;
+  // 헤더에 현재 실행 중인 모델 풀네임 표시
+  $('modelName').textContent = currentVariant ? `gemma-4-12B-it-${currentVariant}` : 'gemma-4-12B-it';
   const b = $('badge');
-  b.className = 'badge ' + (on ? 'on' : 'off');
-  b.textContent = on ? `running · PID ${pid}` : 'stopped';
-  $('btnStart').disabled = on;
-  $('btnStop').disabled = !on;
-  // 목표 상태에 도달하면 전환 안내 메시지 제거
-  if ((on && pendingState === 'on') || (!on && pendingState === 'off')) {
+  if (state === 'ready') {
+    b.className = 'badge on';
+    b.textContent = `running · ${variant} · PID ${pid}`;
+  } else if (state === 'loading') {
+    b.className = 'badge loading';
+    b.textContent = `로딩 중… · ${variant}`;
+  } else {
+    b.className = 'badge off';
+    b.textContent = 'stopped';
+  }
+  syncButtons();
+  // 시작은 ready 도달 시, 중지는 stopped 도달 시 안내 메시지 제거 (loading 중엔 유지)
+  if ((state === 'ready' && pendingState === 'on') || (state === 'stopped' && pendingState === 'off')) {
     $('ctrlMsg').textContent = '';
     pendingState = null;
   }
 }
+
+function syncButtons() {
+  const on = currentVariant !== null;
+  const sel = $('variant').value;
+  $('btnStop').disabled = !on;
+  // 미실행이면 시작 가능, 실행 중이라도 다른 variant 선택 시 전환 시작 가능
+  $('btnStart').disabled = on && sel === currentVariant;
+  // 실행 중 다른 정밀도를 고르면 버튼이 '전환'(재기동)임을 명시
+  $('btnStart').textContent = (on && sel !== currentVariant) ? '전환' : '시작';
+}
+$('variant').onchange = syncButtons;
 
 // ---- 서버 제어 ----
 $('btnStart').onclick = () => control('start');
@@ -201,7 +234,12 @@ $('btnStop').onclick = () => control('stop');
 async function control(action) {
   $('ctrlMsg').textContent = '처리 중…';
   try {
-    const r = await (await fetch('/api/server/' + action, { method: 'POST' })).json();
+    const opts = { method: 'POST' };
+    if (action === 'start') {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify({ variant: $('variant').value });
+    }
+    const r = await (await fetch('/api/server/' + action, opts)).json();
     $('ctrlMsg').textContent = r.message || '';
     pendingState = action === 'start' ? 'on' : 'off';
   } catch (e) {

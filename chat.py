@@ -6,16 +6,27 @@
 """
 import json
 import sys
+import urllib.error
 import urllib.request
 
-ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
-MODEL = "mlx-community/gemma-4-12B-it-4bit"
+BASE_URL = "http://127.0.0.1:8080/v1"
+ENDPOINT = f"{BASE_URL}/chat/completions"
+FALLBACK_MODEL = "mlx-community/gemma-4-12B-it-4bit"
 
 
-def send(messages: list[dict], max_tokens: int = 512) -> str:
+def resolve_model() -> str:
+    """서버가 현재 로드한 모델 id를 조회한다 (4bit/8bit 무관). 실패하면 fallback."""
+    try:
+        with urllib.request.urlopen(f"{BASE_URL}/models", timeout=10) as resp:
+            return json.load(resp)["data"][0]["id"]
+    except (urllib.error.URLError, OSError, KeyError, IndexError, json.JSONDecodeError):
+        return FALLBACK_MODEL
+
+
+def send(messages: list[dict], model: str, max_tokens: int = 512) -> str:
     """토큰을 받는 즉시 출력하고, 전체 응답 텍스트를 반환한다."""
     payload = {
-        "model": MODEL,
+        "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
         "stream": True,
@@ -42,11 +53,11 @@ def send(messages: list[dict], max_tokens: int = 512) -> str:
     return "".join(parts)
 
 
-def once(prompt: str) -> None:
-    send([{"role": "user", "content": prompt}])
+def once(prompt: str, model: str) -> None:
+    send([{"role": "user", "content": prompt}], model)
 
 
-def interactive() -> None:
+def interactive(model: str) -> None:
     print("대화형 모드 (종료: exit / quit / Ctrl-D)")
     messages: list[dict] = []
     while True:
@@ -61,15 +72,16 @@ def interactive() -> None:
             continue
         messages.append({"role": "user", "content": user})
         print("\ngemma> ", end="", flush=True)
-        reply = send(messages)
+        reply = send(messages, model)
         messages.append({"role": "assistant", "content": reply})
 
 
 def main() -> None:
+    model = resolve_model()
     if len(sys.argv) > 1:
-        once(" ".join(sys.argv[1:]))
+        once(" ".join(sys.argv[1:]), model)
     else:
-        interactive()
+        interactive(model)
 
 
 if __name__ == "__main__":
