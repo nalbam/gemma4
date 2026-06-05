@@ -125,7 +125,7 @@ async def chat(request: Request):
         return JSONResponse(status_code=502, content={"error": "gemma 서버가 꺼져 있습니다. 먼저 서버를 시작하세요."})
 
     async def stream():
-        payload = {"model": MODEL, "messages": messages, "max_tokens": 1024, "stream": True}
+        payload = {"model": MODEL, "messages": messages, "max_tokens": 4096, "stream": True}
         try:
             async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", f"{GEMMA_URL}/chat/completions", json=payload) as resp:
