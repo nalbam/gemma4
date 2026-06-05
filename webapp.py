@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 import metrics
-from backend import pick_backend
+from backends import idle_process, pick_backend
 
 BASE_DIR = Path(__file__).parent
 WEB_HOST = "127.0.0.1"
@@ -58,10 +58,7 @@ def server_stop():
 @app.get("/api/metrics")
 def metrics_endpoint():
     st = backend.status()
-    process = backend.process_metrics() if st["running"] else {
-        "running": False, "pid": None, "cpu": 0, "mem_gb": 0.0,
-        "mem_pct": 0, "mem_total_gb": metrics.TOTAL_GB, "etime": "",
-    }
+    process = backend.process_metrics() if st["running"] else idle_process()
     return {"system": metrics.system(), "process": process, "ncpu": metrics.NCPU,
             "variant": st["variant"], "state": st["state"]}
 

@@ -35,9 +35,9 @@ hf download mlx-community/gemma-4-12B-it-8bit
 ### 스크립트 (권장)
 
 ```bash
-./start.sh         # 4bit로 백그라운드 기동 + 준비 완료까지 대기 (기본)
-./start.sh 8bit    # 8bit로 기동
-./stop.sh          # 중지
+./scripts/start.sh         # 4bit로 백그라운드 기동 + 준비 완료까지 대기 (기본)
+./scripts/start.sh 8bit    # 8bit로 기동
+./scripts/stop.sh          # 중지
 ```
 
 ### 띄우기 (직접)
@@ -69,7 +69,7 @@ Uvicorn running on http://127.0.0.1:8080
 pgrep -fl mlx_vlm.server                                              # 프로세스
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/v1/models  # 응답(200=정상)
 tail -f /tmp/gemma4_server.log                                        # 로그
-./monitor.sh        # 막대 그래프 (간격(초) 인자, 기본 2)
+./scripts/monitor.sh        # 막대 그래프 (간격(초) 인자, 기본 2)
 ```
 
 **전체 시스템**
@@ -155,10 +155,10 @@ WSL(Ubuntu) + NVIDIA GPU 환경. RTX 4070 SUPER(12GB) 기준 **4bit(Q4_K_M, ~7GB
 curl -fsSL https://ollama.com/install.sh | sh
 
 # 모델 다운로드 + Python 의존성
-./setup-wsl.sh
+./scripts/setup-wsl.sh
 ```
 
-`setup-wsl.sh`는 ollama 버전을 확인하고 `gemma4:12b`를 받은 뒤 `requirements-wsl.txt`(mlx 제외)를 설치한다.
+`scripts/setup-wsl.sh`는 ollama 버전을 확인하고 `gemma4:12b`를 받은 뒤 `requirements-wsl.txt`(mlx 제외)를 설치한다.
 
 ### 서버
 
@@ -181,12 +181,12 @@ python chat.py                          # 대화형
 python webapp.py                        # 웹 UI → http://127.0.0.1:8000
 ```
 
-- **모니터링** — 웹 UI와 `monitor.sh`의 "gemma4" 패널은 Linux에서 **GPU(util·VRAM)**를 표시한다 (`nvidia-smi`).
+- **모니터링** — 웹 UI와 `scripts/monitor.sh`의 "gemma4" 패널은 Linux에서 **GPU(util·VRAM)**를 표시한다 (`nvidia-smi`).
 - **8bit** — `gemma4:12b-q8_0`(~13GB)는 12GB VRAM을 초과해 CPU 오프로딩으로 느려진다. 4bit 권장.
 - **이미지** — 웹 UI의 📎 첨부로 멀티모달(vision) 질의가 가능하다 (Gemma 4 멀티모달).
 
 ## 참고 (macOS / MLX)
 
 - 응답에 `<audio|>`·`<image|>` 같은 멀티모달 특수 토큰이 가끔 섞여 나올 수 있다 (서버 디코딩 아티팩트). 필요하면 클라이언트에서 후처리로 제거한다.
-- 4bit/8bit는 웹 UI 드롭다운 또는 `./start.sh 8bit`로 전환한다. 8bit(~12.7GB)가 품질이 더 높고, 4bit(~11GB) 대비 메모리 차이는 작다.
+- 4bit/8bit는 웹 UI 드롭다운 또는 `./scripts/start.sh 8bit`로 전환한다. 8bit(~12.7GB)가 품질이 더 높고, 4bit(~11GB) 대비 메모리 차이는 작다.
 - 슬립 방지(장시간 서빙): `sudo pmset -a sleep 0`

@@ -2,7 +2,7 @@
 # WSL/CUDA 부트스트랩 — Ollama 버전 확인 + gemma4 모델 다운로드 + Python 의존성.
 set -euo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."   # 프로젝트 루트 (requirements-wsl.txt 위치)
 
 MODEL="gemma4:12b"
 MIN_VER="0.20"
