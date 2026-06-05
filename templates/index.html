@@ -89,6 +89,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
+let pendingState = null;  // 'on' | 'off' — 서버 전환 대기 상태(도달하면 안내 메시지 제거)
 
 // ---- 색상: 임계값 ----
 function colorFor(pct) {
@@ -128,6 +129,11 @@ function setBadge(on, pid) {
   b.textContent = on ? `running · PID ${pid}` : 'stopped';
   $('btnStart').disabled = on;
   $('btnStop').disabled = !on;
+  // 목표 상태에 도달하면 전환 안내 메시지 제거
+  if ((on && pendingState === 'on') || (!on && pendingState === 'off')) {
+    $('ctrlMsg').textContent = '';
+    pendingState = null;
+  }
 }
 
 // ---- 서버 제어 ----
@@ -138,8 +144,10 @@ async function control(action) {
   try {
     const r = await (await fetch('/api/server/' + action, { method: 'POST' })).json();
     $('ctrlMsg').textContent = r.message || '';
+    pendingState = action === 'start' ? 'on' : 'off';
   } catch (e) {
     $('ctrlMsg').textContent = '요청 실패: ' + e;
+    pendingState = null;
   }
   poll();
 }
