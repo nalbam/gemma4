@@ -39,6 +39,12 @@
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
   .msg.bot { align-self: flex-start; background: #20242e; border-bottom-left-radius: 3px; }
   .msg.err { align-self: flex-start; background: rgba(226,80,59,.15); color: var(--red); }
+  .msg strong { font-weight: 700; }
+  .msg code { background: rgba(255,255,255,.1); padding: 1px 5px; border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .msg pre { background: #11141a; padding: 10px 12px; border-radius: 8px;
+    overflow-x: auto; margin: 6px 0; white-space: pre; }
+  .msg pre code { background: none; padding: 0; }
   .composer { display: flex; gap: 8px; margin-top: 12px; }
   .composer { flex-shrink: 0; }
   .composer textarea { flex: 1; resize: none; background: #11141a; color: var(--text);
@@ -97,6 +103,21 @@ function colorFor(pct) {
   if (pct >= 60) return getComputedStyle(document.documentElement).getPropertyValue('--yellow');
   return getComputedStyle(document.documentElement).getPropertyValue('--green');
 }
+// ---- 경량 마크다운 렌더 (escape 먼저 → XSS 방지) ----
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function renderMarkdown(text) {
+  let h = escapeHtml(text);
+  h = h.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, c) => `<pre><code>${c.replace(/\n$/, '')}</code></pre>`);
+  h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  h = h.replace(/^#{1,6}\s+(.+)$/gm, '<strong>$1</strong>');
+  h = h.replace(/^\s*[-*]\s+(.+)$/gm, '• $1');
+  return h;
+}
+
 function setBar(barId, txtId, pct, text) {
   const el = $(barId);
   el.style.width = Math.min(100, Math.max(0, pct)) + '%';
@@ -193,9 +214,11 @@ async function send() {
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
+        // 갱신 전 하단 근처였는지 확인 → 그럴 때만 따라감(위로 올려두면 유지)
+        const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
         acc += dec.decode(value, { stream: true });
-        bot.textContent = acc;
-        log.scrollTop = log.scrollHeight;
+        bot.innerHTML = renderMarkdown(acc);
+        if (stick) log.scrollTop = log.scrollHeight;
       }
       history.push({ role: 'assistant', content: acc });
     }
