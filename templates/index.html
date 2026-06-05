@@ -181,7 +181,7 @@ async function poll() {
     const state = m.state;  // 'stopped' | 'loading' | 'ready'
     if (state !== 'stopped' && p.running) {
       setBar('pCpu', 'pCpuT', p.cpu, `${p.cpu}% (raw, ${m.ncpu}코어)`);
-      setBar('pMem', 'pMemT', p.mem_pct, `${p.mem_gb} / ${m.system.mem_total_gb} GB`);
+      setBar('pMem', 'pMemT', p.mem_pct, `${p.mem_gb} / ${p.mem_total_gb} GB`);
     } else {
       setBar('pCpu', 'pCpuT', 0, '–');
       setBar('pMem', 'pMemT', 0, '–');

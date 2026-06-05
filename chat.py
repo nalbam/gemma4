@@ -5,17 +5,27 @@
     python chat.py                          # 대화형 모드 (멀티턴, exit/quit 로 종료)
 """
 import json
+import os
+import platform
 import sys
 import urllib.error
 import urllib.request
 
-BASE_URL = "http://127.0.0.1:8080/v1"
+IS_MAC = platform.system() == "Darwin"
+# macOS/MLX → :8080, 그 외(Linux/Ollama) → :11434. GEMMA_BASE_URL 로 강제 가능.
+BASE_URL = os.environ.get(
+    "GEMMA_BASE_URL",
+    "http://127.0.0.1:8080/v1" if IS_MAC else "http://127.0.0.1:11434/v1",
+).rstrip("/")
 ENDPOINT = f"{BASE_URL}/chat/completions"
-FALLBACK_MODEL = "mlx-community/gemma-4-12B-it-4bit"
+FALLBACK_MODEL = "mlx-community/gemma-4-12B-it-4bit" if IS_MAC else "gemma4:12b"
 
 
 def resolve_model() -> str:
-    """서버가 현재 로드한 모델 id를 조회한다 (4bit/8bit 무관). 실패하면 fallback."""
+    """서버가 현재 로드한 모델 id를 조회한다 (4bit/8bit 무관). 실패하면 fallback.
+    Ollama(/v1/models)는 설치된 전체 모델을 나열하므로 첫 항목이 gemma 가 아닐 수 있어 고정값을 쓴다."""
+    if not IS_MAC:
+        return FALLBACK_MODEL
     try:
         with urllib.request.urlopen(f"{BASE_URL}/models", timeout=10) as resp:
             return json.load(resp)["data"][0]["id"]

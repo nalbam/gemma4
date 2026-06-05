@@ -1,0 +1,6 @@
+# WSL/CUDA(Ollama) 용 — 서빙은 ollama 데몬이 담당하므로 webapp/chat 실행에 필요한 것만.
+# mlx/mlx-lm/mlx-vlm 은 Apple Silicon 전용이라 Linux 에서 설치되지 않으므로 제외한다.
+fastapi==0.135.1
+uvicorn==0.41.0
+httpx==0.28.1
+jinja2==3.1.6

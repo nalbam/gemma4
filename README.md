@@ -1,12 +1,19 @@
-# gemma4 로컬 서빙 (MLX)
+# gemma4 로컬 서빙
 
-Apple Silicon Mac에서 [MLX](https://github.com/ml-explore/mlx)로 `gemma-4-12B-it-4bit` 멀티모달 모델을 로컬 OpenAI 호환 서버로 구동한다.
+`gemma-4-12B-it` 멀티모달 모델(12B, 4bit)을 로컬 OpenAI 호환 서버로 구동한다. 백엔드는 OS로 런타임 자동 선택된다:
+
+- **macOS (Apple Silicon)** — [MLX](https://github.com/ml-explore/mlx) `mlx_vlm.server` (`:8080`)
+- **WSL / Linux (NVIDIA CUDA)** — [Ollama](https://ollama.com) (`:11434`)
+
+`webapp.py`·`chat.py`·`templates/`(UI)는 두 백엔드가 공유한다. `GEMMA_BACKEND=mlx|ollama` 로 강제할 수 있다.
+
+아래 **설치·서버** 절은 macOS(MLX) 기준이다. WSL/CUDA는 [WSL / CUDA (Ollama)](#wsl--cuda-ollama) 절을 참고한다.
 
 ## 환경
 
-- macOS (Apple Silicon)
-- Python 3.12
-- 모델: [`mlx-community/gemma-4-12B-it-4bit`](https://huggingface.co/mlx-community/gemma-4-12B-it-4bit) (~7GB, 추론 시 메모리 ~11GB)
+- macOS (Apple Silicon) · Python 3.12 — MLX 백엔드
+- WSL / Linux + NVIDIA GPU — Ollama 백엔드 ([WSL / CUDA (Ollama)](#wsl--cuda-ollama))
+- 모델: [`mlx-community/gemma-4-12B-it-4bit`](https://huggingface.co/mlx-community/gemma-4-12B-it-4bit) (~7GB, 추론 시 메모리 ~11GB) / Linux는 `gemma4:12b`
 
 ## 설치
 
@@ -136,6 +143,47 @@ python webapp.py   # http://127.0.0.1:8000
 - **서버 제어** — 4bit/8bit를 드롭다운에서 골라 시작/중지한다 (`start.sh`/`stop.sh` 호출). 실행 중 다른 정밀도를 고르고 시작하면 자동으로 재기동해 전환한다. 서버가 꺼져 있어도 UI에서 바로 기동할 수 있다.
 - **모니터링** — 전체 시스템과 gemma4 프로세스의 CPU·MEM을 2초 간격으로 갱신한다 (`monitor.sh`와 같은 지표).
 - **채팅** — 스트리밍 응답, 마크다운·표 렌더링, 이미지 첨부(멀티모달)를 지원한다. 서버가 꺼져 있으면 먼저 시작하라는 안내가 뜬다.
+
+## WSL / CUDA (Ollama)
+
+WSL(Ubuntu) + NVIDIA GPU 환경. RTX 4070 SUPER(12GB) 기준 **4bit(Q4_K_M, ~7GB)는 전부 VRAM에 적재**된다.
+
+### 준비
+
+```bash
+# Ollama 0.20+ 필요 (Gemma 4 지원). 구버전이면 먼저 업데이트 (sudo):
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 모델 다운로드 + Python 의존성
+./setup-wsl.sh
+```
+
+`setup-wsl.sh`는 ollama 버전을 확인하고 `gemma4:12b`를 받은 뒤 `requirements-wsl.txt`(mlx 제외)를 설치한다.
+
+### 서버
+
+Ollama 데몬(systemd)이 서빙을 담당한다. 모델은 첫 요청 또는 웹 UI **"시작"**으로 VRAM에 적재된다.
+
+```bash
+ollama ps                  # 로드된 모델 확인
+ollama run gemma4:12b      # 터미널에서 바로 대화
+```
+
+엔드포인트(OpenAI 호환): `http://127.0.0.1:11434/v1`
+
+### 사용법
+
+`chat.py`·`webapp.py`는 Linux에서 자동으로 `:11434`를 향한다 (`GEMMA_BASE_URL`로 강제 가능).
+
+```bash
+python chat.py "사과에 대해 설명해줘"   # 단발
+python chat.py                          # 대화형
+python webapp.py                        # 웹 UI → http://127.0.0.1:8000
+```
+
+- **모니터링** — 웹 UI와 `monitor.sh`의 "gemma4" 패널은 Linux에서 **GPU(util·VRAM)**를 표시한다 (`nvidia-smi`).
+- **8bit** — `gemma4:12b-q8_0`(~13GB)는 12GB VRAM을 초과해 CPU 오프로딩으로 느려진다. 4bit 권장.
+- **이미지** — 웹 UI의 📎 첨부로 멀티모달(vision) 질의가 가능하다 (Gemma 4 멀티모달).
 
 ## 참고
 
