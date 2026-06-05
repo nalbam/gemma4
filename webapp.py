@@ -34,24 +34,37 @@ def server_pid() -> int | None:
     return int(pids[0]) if pids else None
 
 
+def _used_mem_gb() -> float:
+    """실제 사용 메모리 = anonymous + wired + compressed.
+    top의 PhysMem 'used'는 inactive·파일 캐시(회수 가능)까지 포함해 과대 표시되므로 쓰지 않는다."""
+    vm = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
+    psize = 4096
+    m = re.search(r"page size of (\d+)", vm)
+    if m:
+        psize = int(m.group(1))
+
+    def pages(name: str) -> int:
+        mm = re.search(rf"{re.escape(name)}:\s+(\d+)", vm)
+        return int(mm.group(1)) if mm else 0
+
+    used_pages = pages("Pages wired down") + pages("Anonymous pages") + pages("Pages occupied by compressor")
+    return round(used_pages * psize / 1073741824, 1)
+
+
 def _system_metrics() -> dict:
-    """top -l1 한 번으로 시스템 CPU(user+sys) + MEM(used) 수집."""
+    """시스템 CPU(top user+sys) + 실제 사용 메모리(vm_stat)."""
     out = subprocess.run(["top", "-l1", "-n0"], capture_output=True, text=True).stdout
     cpu = 0
-    mem_used_gb = 0.0
     for line in out.splitlines():
         if "CPU usage" in line:
             m = re.search(r"([\d.]+)%\s+idle", line)
             if m:
                 cpu = round(100 - float(m.group(1)))
-        elif line.startswith("PhysMem"):
-            m = re.search(r"PhysMem:\s+([\d.]+)([GM])\s+used", line)
-            if m:
-                val = float(m.group(1))
-                mem_used_gb = val / 1024 if m.group(2) == "M" else val
+            break
+    mem_used_gb = _used_mem_gb()
     return {
         "cpu": cpu,
-        "mem_used_gb": round(mem_used_gb, 1),
+        "mem_used_gb": mem_used_gb,
         "mem_total_gb": TOTAL_GB,
         "mem_pct": round(mem_used_gb / TOTAL_GB * 100) if TOTAL_GB else 0,
     }

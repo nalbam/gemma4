@@ -42,8 +42,13 @@ while true; do
   # 전체 시스템 (top 1회 호출로 CPU + MEM 동시 수집)
   topout="$(top -l1 -n0)"
   sys_cpu=$(awk '/CPU usage/{v=$7; gsub(/%/,"",v); printf "%d", 100-v+0.5}' <<< "$topout")
-  phys=$(awk '/PhysMem/{print $2}' <<< "$topout")
-  used_gb=$(awk -v s="$phys" 'BEGIN{n=s+0; if (s ~ /M/) n/=1024; printf "%.1f", n}')
+  # 실제 사용 = anon + wired + compressed (top의 PhysMem used는 회수 가능한 캐시까지 포함해 과대)
+  used_gb=$(vm_stat | awk '
+    /page size of/ { match($0, /[0-9]+/); ps = substr($0, RSTART, RLENGTH) }
+    /Pages wired down/ { gsub(/\./, ""); w = $NF }
+    /Anonymous pages/ { gsub(/\./, ""); a = $NF }
+    /Pages occupied by compressor/ { gsub(/\./, ""); c = $NF }
+    END { printf "%.1f", (w + a + c) * ps / 1073741824 }')
   sys_mem=$(awk -v u="$used_gb" -v t="$total_gb" 'BEGIN{printf "%d", u/t*100 + 0.5}')
 
   printf '\033[H'   # 커서 맨 위 (제자리 덮어쓰기 → 깜빡임 없음)
