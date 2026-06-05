@@ -97,7 +97,7 @@ ollama run gemma4:12b      # 터미널에서 바로 대화
 
 ## 사용법 (공통)
 
-엔드포인트는 플랫폼별(`:8080` MLX / `:11434` Ollama)이지만 `chat.py`·`webapp.py`는 OS에 맞춰 자동으로 향한다(`GEMMA_BASE_URL`로 강제 가능). 아래 `curl`·SDK 예시의 호스트·모델명은 플랫폼에 맞춰 바꾼다.
+엔드포인트는 플랫폼별(`:8080` MLX / `:11434` Ollama)이지만 `chat.py`·`webapp.py`는 OS에 맞춰 자동으로 향한다(`chat.py`는 `GEMMA_BASE_URL`, `webapp.py`는 `GEMMA_BACKEND`로 강제 가능). 아래 `curl`·SDK 예시의 호스트·모델명은 플랫폼에 맞춰 바꾼다.
 
 ### chat.py — 텍스트 대화 (스트리밍)
 
