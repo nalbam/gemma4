@@ -12,7 +12,9 @@
 ## 환경
 
 - **macOS** (Apple Silicon) · Python 3.12 — MLX, 모델 [`mlx-community/gemma-4-12B-it-4bit`](https://huggingface.co/mlx-community/gemma-4-12B-it-4bit) (~7GB, 추론 시 ~11GB)
+  - 테스트: MacBook Pro M4 Pro · 24GB
 - **WSL / Linux** + NVIDIA GPU — Ollama, 모델 `gemma4:12b` (4bit Q4_K_M, ~7GB)
+  - 테스트: Intel i7 · NVIDIA GeForce RTX 4070 SUPER (12GB)
 
 ## 설치
 
