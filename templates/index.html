@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gemma4 web</title>
+<style>
+  :root {
+    --bg: #0f1116; --panel: #181b22; --border: #2a2f3a; --text: #e6e8ec;
+    --dim: #8b93a1; --green: #36c46f; --yellow: #e0b341; --red: #e2503b; --accent: #5b8cff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .wrap { height: 100dvh; max-width: 1100px; margin: 0 auto; padding: 12px;
+    display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 13px; color: var(--dim); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .panel.chat { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .panel.chat h2 { flex-shrink: 0; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .spacer { flex: 1; }
+  .badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.on { background: rgba(54,196,111,.15); color: var(--green); }
+  .badge.off { background: rgba(226,80,59,.15); color: var(--red); }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .metric { margin: 6px 0; }
+  .metric .label { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-bottom: 2px; }
+  .bar { height: 6px; background: #11141a; border-radius: 3px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; width: 0; border-radius: 3px; transition: width .4s ease, background .4s; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
+  #log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
+  .msg { max-width: 80%; padding: 9px 13px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+  .msg.bot { align-self: flex-start; background: #20242e; border-bottom-left-radius: 3px; }
+  .msg.err { align-self: flex-start; background: rgba(226,80,59,.15); color: var(--red); }
+  .composer { display: flex; gap: 8px; margin-top: 12px; }
+  .composer { flex-shrink: 0; }
+  .composer textarea { flex: 1; resize: none; background: #11141a; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font: inherit; height: 42px; }
+  .hint { color: var(--dim); font-size: 12px; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="panel">
+    <div class="row">
+      <h1>gemma4 <span class="hint">{{ model }}</span></h1>
+      <div class="spacer"></div>
+      <span id="badge" class="badge off">확인 중…</span>
+      <button id="btnStart" class="ghost">시작</button>
+      <button id="btnStop" class="ghost">중지</button>
+    </div>
+    <div id="ctrlMsg" class="hint" style="margin-top:8px"></div>
+  </div>
+
+  <div class="panel">
+    <div class="grid">
+      <div>
+        <h2>전체 시스템</h2>
+        <div class="metric"><div class="label"><span>CPU</span><span id="sysCpuT">–</span></div><div class="bar"><span id="sysCpu"></span></div></div>
+        <div class="metric"><div class="label"><span>MEM</span><span id="sysMemT">–</span></div><div class="bar"><span id="sysMem"></span></div></div>
+      </div>
+      <div>
+        <h2>gemma4 프로세스</h2>
+        <div class="metric"><div class="label"><span>CPU</span><span id="pCpuT">–</span></div><div class="bar"><span id="pCpu"></span></div></div>
+        <div class="metric"><div class="label"><span>MEM</span><span id="pMemT">–</span></div><div class="bar"><span id="pMem"></span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel chat">
+    <h2>채팅</h2>
+    <div id="log"></div>
+    <div class="composer">
+      <textarea id="input" placeholder="메시지를 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)"></textarea>
+      <button id="send">전송</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// ---- 색상: 임계값 ----
+function colorFor(pct) {
+  if (pct >= 85) return getComputedStyle(document.documentElement).getPropertyValue('--red');
+  if (pct >= 60) return getComputedStyle(document.documentElement).getPropertyValue('--yellow');
+  return getComputedStyle(document.documentElement).getPropertyValue('--green');
+}
+function setBar(barId, txtId, pct, text) {
+  const el = $(barId);
+  el.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  el.style.background = colorFor(pct);
+  $(txtId).textContent = text;
+}
+
+// ---- 모니터링 폴링 ----
+async function poll() {
+  try {
+    const m = await (await fetch('/api/metrics')).json();
+    setBar('sysCpu', 'sysCpuT', m.system.cpu, m.system.cpu + '%');
+    setBar('sysMem', 'sysMemT', m.system.mem_pct, `${m.system.mem_used_gb} / ${m.system.mem_total_gb} GB`);
+    const p = m.process;
+    if (p.running) {
+      setBar('pCpu', 'pCpuT', p.cpu, `${p.cpu}% (raw, ${m.ncpu}코어)`);
+      setBar('pMem', 'pMemT', p.mem_pct, `${p.mem_gb} / ${m.system.mem_total_gb} GB`);
+      setBadge(true, p.pid);
+    } else {
+      setBar('pCpu', 'pCpuT', 0, '–');
+      setBar('pMem', 'pMemT', 0, '–');
+      setBadge(false);
+    }
+  } catch (e) { /* 일시적 실패 무시 */ }
+}
+
+function setBadge(on, pid) {
+  const b = $('badge');
+  b.className = 'badge ' + (on ? 'on' : 'off');
+  b.textContent = on ? `running · PID ${pid}` : 'stopped';
+  $('btnStart').disabled = on;
+  $('btnStop').disabled = !on;
+}
+
+// ---- 서버 제어 ----
+$('btnStart').onclick = () => control('start');
+$('btnStop').onclick = () => control('stop');
+async function control(action) {
+  $('ctrlMsg').textContent = '처리 중…';
+  try {
+    const r = await (await fetch('/api/server/' + action, { method: 'POST' })).json();
+    $('ctrlMsg').textContent = r.message || '';
+  } catch (e) {
+    $('ctrlMsg').textContent = '요청 실패: ' + e;
+  }
+  poll();
+}
+
+// ---- 채팅 ----
+const history = [];
+const log = $('log');
+
+function addMsg(cls, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  return d;
+}
+
+async function send() {
+  const input = $('input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.disabled = true; $('send').disabled = true;
+
+  addMsg('user', text);
+  history.push({ role: 'user', content: text });
+  const bot = addMsg('bot', '');
+  let acc = '';
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      bot.className = 'msg err';
+      bot.textContent = err.error || ('오류 ' + resp.status);
+    } else {
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        acc += dec.decode(value, { stream: true });
+        bot.textContent = acc;
+        log.scrollTop = log.scrollHeight;
+      }
+      history.push({ role: 'assistant', content: acc });
+    }
+  } catch (e) {
+    bot.className = 'msg err';
+    bot.textContent = '전송 실패: ' + e;
+  } finally {
+    input.disabled = false; $('send').disabled = false; input.focus();
+  }
+}
+
+$('send').onclick = send;
+$('input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+// ---- 시작 ----
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

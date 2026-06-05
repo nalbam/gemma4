@@ -5,3 +5,9 @@ huggingface-hub==1.17.0
 librosa==0.11.0
 soundfile==0.13.1
 pillow==12.2.0
+
+# 웹 UI (webapp.py) — 대부분 mlx-vlm 의존성으로 이미 설치됨
+fastapi==0.135.1
+uvicorn==0.41.0
+httpx==0.28.1
+jinja2==3.1.6
