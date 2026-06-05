@@ -1,7 +1,7 @@
 mlx==0.31.2
 mlx-lm==0.31.3
 mlx-vlm==0.6.1
-huggingface-hub==1.17.0
+huggingface-hub[hf_xet]==1.17.0
 librosa==0.11.0
 soundfile==0.13.1
 pillow==12.2.0

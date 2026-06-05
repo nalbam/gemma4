@@ -24,10 +24,10 @@ brew install python@3.12
 ./scripts/setup-mac.sh
 ```
 
-`scripts/setup-mac.sh`는 Python을 확인하고 `requirements.txt`(mlx 등)를 설치한 뒤 `gemma-4-12B-it-4bit`(~7GB)를 받는다. 수동으로 하려면:
+`scripts/setup-mac.sh`는 Python을 확인하고 `requirements.txt`(mlx 등)를 설치한 뒤 `gemma-4-12B-it-4bit`(~7GB)를 받는다. `requirements.txt`의 `huggingface-hub[hf_xet]`가 Xet 저장소 **고속 다운로드**를 자동 적용한다. 수동으로 하려면:
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt   # hf_xet 포함 → hf download 자동 가속
 hf download mlx-community/gemma-4-12B-it-4bit
 hf download mlx-community/gemma-4-12B-it-8bit   # 8bit도 쓰려면 (~12.7GB)
 ```
