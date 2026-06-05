@@ -1,5 +1,7 @@
 # gemma4 로컬 서빙
 
+![gemma4 웹 UI](gemma4.jpg)
+
 `gemma-4-12B-it` 멀티모달 모델(12B, 4bit)을 로컬 OpenAI 호환 서버로 구동한다. 백엔드는 OS로 런타임 자동 선택된다:
 
 - **macOS (Apple Silicon)** — [MLX](https://github.com/ml-explore/mlx) `mlx_vlm.server` (`:8080`)
@@ -109,8 +111,6 @@ python chat.py                          # 대화형 (멀티턴, 종료: exit / q
 ```bash
 python webapp.py   # http://127.0.0.1:8000
 ```
-
-![gemma4 웹 UI](gemma4.jpg)
 
 - **서버 제어** — 4bit/8bit를 드롭다운에서 골라 시작/중지한다. 실행 중 다른 정밀도를 고르고 시작하면 자동 전환(재기동)한다. 꺼져 있어도 UI에서 바로 기동할 수 있다.
 - **모니터링** — 전체 시스템과 가속기 자원을 2초 간격으로 갱신한다(`monitor.sh`와 같은 지표).
