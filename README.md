@@ -58,13 +58,21 @@ Uvicorn running on http://127.0.0.1:8080
 pgrep -fl mlx_vlm.server                                              # 프로세스
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/v1/models  # 응답(200=정상)
 tail -f /tmp/gemma4_server.log                                        # 로그
-./monitor.sh        # CPU/MEM 모니터링 (인자로 간격(초) 지정, 기본 2)
+./monitor.sh        # 막대 그래프 (간격(초) 인자, 기본 2)
 ```
 
-GPU(Metal) 사용률은 `sudo`가 필요하다:
+**전체 시스템**
+- **CPU** — `top`의 user+sys (전체 코어 기준, 0~100%).
+- **MEM** — 시스템 물리 메모리 사용량(`top` PhysMem used). macOS가 캐시·압축을 계속 조절해 미세 변동한다.
+
+**gemma4 프로세스**
+- **CPU** — raw % (1코어=100% 기준). 추론은 GPU 위주라 CPU는 보조적으로만 오른다.
+- **MEM** — `footprint`(phys_footprint)로 모델 **실제 점유량** 표시(`ps` RSS는 MLX/Metal 메모리를 못 잡아 부정확). 추론해도 거의 안 변하는 게 정상 — 모델은 **로드 시점에 메모리를 점유**하고, 추론은 GPU 연산이라 메모리 증감이 없다(KV cache만 미세 증가).
+
+MLX 추론의 실제 부하(GPU)를 보려면 별도로(sudo 필요):
 
 ```bash
-sudo powermetrics --samplers gpu_power -i 1000 -n 1   # GPU 활성도 1회
+sudo powermetrics --samplers gpu_power -i 1000 -n 1
 ```
 
 ### 중지
