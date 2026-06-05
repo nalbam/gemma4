@@ -125,7 +125,10 @@ async def chat(request: Request):
         return JSONResponse(status_code=502, content={"error": "gemma 서버가 꺼져 있습니다. 먼저 서버를 시작하세요."})
 
     async def stream():
+        # NDJSON: 한 줄에 {"delta": "<토큰 텍스트>", "n": <누적 토큰 수>}
+        # mlx 스트리밍은 토큰당 delta를 보내므로 delta 개수 = 생성 토큰 수
         payload = {"model": MODEL, "messages": messages, "max_tokens": 4096, "stream": True}
+        n = 0
         try:
             async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", f"{GEMMA_URL}/chat/completions", json=payload) as resp:
@@ -140,11 +143,12 @@ async def chat(request: Request):
                         except (json.JSONDecodeError, KeyError, IndexError):
                             continue
                         if delta:
-                            yield delta
+                            n += 1
+                            yield json.dumps({"delta": delta, "n": n}, ensure_ascii=False) + "\n"
         except httpx.HTTPError as e:
-            yield f"\n[오류] gemma 서버 통신 실패: {e}"
+            yield json.dumps({"delta": f"\n[오류] gemma 서버 통신 실패: {e}", "n": n}, ensure_ascii=False) + "\n"
 
-    return StreamingResponse(stream(), media_type="text/plain; charset=utf-8")
+    return StreamingResponse(stream(), media_type="application/x-ndjson; charset=utf-8")
 
 
 if __name__ == "__main__":
