@@ -58,6 +58,13 @@ Uvicorn running on http://127.0.0.1:8080
 pgrep -fl mlx_vlm.server                                              # 프로세스
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/v1/models  # 응답(200=정상)
 tail -f /tmp/gemma4_server.log                                        # 로그
+./monitor.sh        # CPU/MEM 모니터링 (인자로 간격(초) 지정, 기본 2)
+```
+
+GPU(Metal) 사용률은 `sudo`가 필요하다:
+
+```bash
+sudo powermetrics --samplers gpu_power -i 1000 -n 1   # GPU 활성도 1회
 ```
 
 ### 중지
