@@ -266,13 +266,13 @@ const log = $('log');
 let pendingImage = null;  // 첨부된 이미지 base64 data URI
 
 $('attach').onclick = () => $('file').click();
-$('file').onchange = (e) => {
-  const f = e.target.files[0];
+function loadImageFile(f) {
   if (!f) return;
   const r = new FileReader();
   r.onload = () => { pendingImage = r.result; showPreview(); };
   r.readAsDataURL(f);
-};
+}
+$('file').onchange = (e) => loadImageFile(e.target.files[0]);
 function showPreview() {
   const p = $('preview');
   p.innerHTML = '';
@@ -382,6 +382,11 @@ async function send() {
 $('send').onclick = send;
 $('input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+// 클립보드 이미지 붙여넣기 (Cmd/Ctrl+V)
+$('input').addEventListener('paste', (e) => {
+  const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+  if (item) { e.preventDefault(); loadImageFile(item.getAsFile()); }
 });
 
 // ---- 시작 ----
