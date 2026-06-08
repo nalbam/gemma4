@@ -117,6 +117,7 @@ const $ = (id) => document.getElementById(id);
 let pendingState = null;  // 'on' | 'off' — 서버 전환 대기 상태(도달하면 안내 메시지 제거)
 let currentVariant = null;  // 실행 중 로드된 variant ('4bit'|'8bit'|null)
 let initialSync = false;    // 최초 poll 시 select를 실행 중 variant로 1회 동기화
+const VARIANT_KEY = 'gemma4.variant';  // 선택한 정밀도 localStorage 키
 
 // ---- 색상: 임계값 ----
 function colorFor(pct) {
@@ -226,7 +227,17 @@ function syncButtons() {
   // 실행 중 다른 정밀도를 고르면 버튼이 '전환'(재기동)임을 명시
   $('btnStart').textContent = (on && sel !== currentVariant) ? '전환' : '시작';
 }
-$('variant').onchange = syncButtons;
+$('variant').onchange = () => {
+  localStorage.setItem(VARIANT_KEY, $('variant').value);
+  syncButtons();
+};
+
+// 저장된 정밀도(variant) 복원 — 마지막 선택을 새로고침 후에도 유지
+const savedVariant = localStorage.getItem(VARIANT_KEY);
+if (savedVariant && [...$('variant').options].some(o => o.value === savedVariant)) {
+  $('variant').value = savedVariant;
+  initialSync = true;  // 실행 중 variant가 저장값을 덮어쓰지 않도록
+}
 
 // ---- 서버 제어 ----
 $('btnStart').onclick = () => control('start');
