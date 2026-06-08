@@ -380,6 +380,7 @@ async function send() {
   meta.className = 'meta';
   log.appendChild(meta);
   let acc = '';
+  const t0 = performance.now();  // 출력 시간 측정 시작
 
   try {
     const messages = systemPrompt
@@ -399,6 +400,7 @@ async function send() {
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
       let buf = '', n = 0;
+      const fmtMeta = () => `${n} 토큰 · ${((performance.now() - t0) / 1000).toFixed(1)}초`;
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -413,11 +415,11 @@ async function send() {
           acc += obj.delta;
           n = obj.n;
           bot.innerHTML = renderMarkdown(acc);
-          meta.textContent = n + ' 토큰';
+          meta.textContent = fmtMeta();
           if (stick) log.scrollTop = log.scrollHeight;
         }
       }
-      meta.textContent = n + ' 토큰';
+      meta.textContent = fmtMeta();
       if (!acc) bot.innerHTML = '';  // 토큰이 하나도 안 온 경우 스피너 제거
       history.push({ role: 'assistant', content: acc });
     }
