@@ -63,6 +63,19 @@
   .composer textarea { flex: 1; resize: none; background: #11141a; color: var(--text);
     border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font: inherit; height: 42px; }
   .hint { color: var(--dim); font-size: 12px; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--dim);
+    border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  button.ghost.active { border-color: var(--accent); color: var(--accent); }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay[hidden] { display: none; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 12px; }
+  .modal h2 { margin: 0; }
+  .modal textarea { background: #11141a; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font: inherit; min-height: 160px; resize: vertical; }
+  .modal-actions { display: flex; align-items: center; gap: 8px; }
   @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -77,6 +90,7 @@
       <select id="variant" class="ghost">
         {% for v in variants %}<option value="{{ v }}"{% if v == default_variant %} selected{% endif %}>{{ v }}</option>{% endfor %}
       </select>
+      <button id="btnSys" class="ghost" title="시스템 프롬프트">시스템</button>
       <button id="btnStart" class="ghost">시작</button>
       <button id="btnStop" class="ghost">중지</button>
     </div>
@@ -110,6 +124,19 @@
     </div>
   </div>
 
+</div>
+
+<div id="sysModal" class="modal-overlay" hidden>
+  <div class="modal">
+    <h2>시스템 프롬프트</h2>
+    <textarea id="sysInput" placeholder="모델의 기본 지침을 입력하세요 (예: 너는 친절한 한국어 비서야)"></textarea>
+    <div class="modal-actions">
+      <button id="sysClear" class="ghost">비우기</button>
+      <div class="spacer"></div>
+      <button id="sysCancel" class="ghost">취소</button>
+      <button id="sysSave">저장</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -260,6 +287,24 @@ async function control(action) {
   poll();
 }
 
+// ---- 시스템 프롬프트 ----
+const SYS_KEY = 'gemma4.systemPrompt';  // 시스템 프롬프트 localStorage 키
+let systemPrompt = localStorage.getItem(SYS_KEY) || '';
+function syncSysButton() { $('btnSys').classList.toggle('active', !!systemPrompt); }
+syncSysButton();
+$('btnSys').onclick = () => { $('sysInput').value = systemPrompt; $('sysModal').hidden = false; $('sysInput').focus(); };
+$('sysCancel').onclick = () => { $('sysModal').hidden = true; };
+$('sysClear').onclick = () => { $('sysInput').value = ''; $('sysInput').focus(); };
+$('sysSave').onclick = () => {
+  systemPrompt = $('sysInput').value.trim();
+  localStorage.setItem(SYS_KEY, systemPrompt);
+  $('sysModal').hidden = true;
+  syncSysButton();
+};
+// 오버레이 바깥 클릭 / Esc 로 닫기
+$('sysModal').onclick = (e) => { if (e.target === $('sysModal')) $('sysModal').hidden = true; };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('sysModal').hidden = true; });
+
 // ---- 채팅 ----
 const history = [];
 const log = $('log');
@@ -330,16 +375,20 @@ async function send() {
   pendingImage = null; showPreview();
 
   const bot = addMsg('bot', '');
+  bot.innerHTML = '<span class="spinner"></span>';  // 첫 토큰 도착 시 renderMarkdown 으로 교체됨
   const meta = document.createElement('div');
   meta.className = 'meta';
   log.appendChild(meta);
   let acc = '';
 
   try {
+    const messages = systemPrompt
+      ? [{ role: 'system', content: systemPrompt }, ...history]
+      : history;
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ messages }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -369,6 +418,7 @@ async function send() {
         }
       }
       meta.textContent = n + ' 토큰';
+      if (!acc) bot.innerHTML = '';  // 토큰이 하나도 안 온 경우 스피너 제거
       history.push({ role: 'assistant', content: acc });
     }
   } catch (e) {
